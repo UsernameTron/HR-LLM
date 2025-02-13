@@ -1,0 +1,47 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - rules/*.yml
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'metrics-exporter'
+    static_configs:
+      - targets: ['metrics-exporter:9091']
+    
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: /metrics
+    
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+
+# Alert thresholds based on memory configuration
+alerting_thresholds:
+  memory:
+    warning: 33.6  # 70% of 48GB
+    critical: 40.8  # 85% of 48GB
+    rollback: 43.2  # 90% of 48GB
+  error_rate:
+    warning: 0.05   # 5%
+    critical: 0.10  # 10%
+    human_intervention: 0.15  # 15%
+  performance:
+    warning: 0.25   # 25% degradation
+    critical: 0.40  # 40% degradation
+    rollback: 0.50  # 50% degradation

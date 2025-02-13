@@ -1,0 +1,281 @@
+name: Performance Regression Testing
+
+on:
+  # Run on PRs
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/cache/**'
+      - 'tests/benchmarks/**'
+      - 'config/**'
+  
+  # Run daily at midnight UTC
+  schedule:
+    - cron: '0 0 * * *'
+  
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to run benchmarks in'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+          - ci
+
+jobs:
+  benchmark:
+    name: Run Performance Benchmarks
+    runs-on: macos-14  # Specifically for M4 Pro ARM architecture
+    env:
+      BENCHMARK_ENV: ${{ github.event_name == 'pull_request' && 'ci' || inputs.environment || 'production' }}
+      CONFIG_FILE: config/benchmark_environments.yml
+      PYTHON_VERSION: '3.11'
+      # Resource limits matching M4 Pro specs
+      # M4 Pro Optimized Resource Allocation
+      METAL_MAX_MEMORY: 42G  # Optimized for benchmarking workload
+      METAL_CPU_THREADS: 12  # M4 Pro (8 performance, 4 efficiency)
+      METAL_GPU_MEMORY: 20G  # Maximum Metal allocation
+      METAL_MPS_BATCH_SIZE: 256  # Optimal for Metal backend
+      METAL_MEMORY_PRESSURE_CHECK_INTERVAL: 30  # Check every 30 seconds
+      METAL_ENABLE_PERFORMANCE_LOGGING: true
+      METAL_LOG_MEMORY_USAGE: true
+      METAL_MPS_FALLBACK_TO_CPU: true
+      METAL_MAX_RETRIES: 3
+      METAL_RETRY_DELAY: 1.0
+    services:
+      redis:
+        image: redis:7.2-alpine@sha256:a7cef5f3c11a371ca10fd93a2947ba6c5db4935b0c6b0aa56420b4bc6b2d6f4c  # ARM64 specific image
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --memory 42g
+          --cpus 12
+          --platform linux/arm64
+          --sysctl net.core.somaxconn=1024
+          --sysctl vm.overcommit_memory=1
+        env:
+          REDIS_MAXMEMORY: 42g
+          REDIS_MAXMEMORY_POLICY: allkeys-lru
+          REDIS_SAVE: ""
+          REDIS_APPENDONLY: "no"
+          REDIS_MAXMEMORY_SAMPLES: 10
+          REDIS_ACTIVE_DEFRAG: "yes"
+          REDIS_ACTIVE_DEFRAG_THRESHOLD_LOWER: 10
+          REDIS_ACTIVE_DEFRAG_THRESHOLD_UPPER: 100
+          REDIS_ACTIVE_DEFRAG_IGNORE_BYTES: 64mb
+          REDIS_ACTIVE_DEFRAG_CYCLE_MIN: 25
+          REDIS_ACTIVE_DEFRAG_CYCLE_MAX: 75
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for trend analysis
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt psutil
+          
+          # Install Metal-optimized PyTorch
+          pip install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cpu
+      
+      - name: Download baseline
+        uses: actions/download-artifact@v3
+        with:
+          name: benchmark-baseline
+          path: tests/benchmarks/baselines
+        continue-on-error: true
+      
+      - name: Load environment config
+        id: load-config
+        run: |
+          CURRENT_ENV="${{ github.event_name == 'pull_request' && 'ci' || inputs.environment || 'production' }}"
+          echo "Loading config for environment: $CURRENT_ENV"
+          config=$(python -c "
+          import yaml
+          import os
+          with open('config/benchmark_environments.yml') as f:
+              config = yaml.safe_load(f)['$CURRENT_ENV']
+          print(f'timeout={config[\"benchmark_timeout\"]}', file=open(os.environ['GITHUB_OUTPUT'], 'a'))
+          print(f'iterations={config[\"test_iterations\"]}', file=open(os.environ['GITHUB_OUTPUT'], 'a'))
+          print(f'batch_size={config[\"pipeline\"][\"batch_size\"]}', file=open(os.environ['GITHUB_OUTPUT'], 'a'))
+          print(f'redis_memory={config[\"redis\"][\"maxmemory\"]}', file=open(os.environ['GITHUB_OUTPUT'], 'a'))
+          ")
+
+      - name: Run benchmarks
+        id: run-benchmarks
+        env:
+          MKL_NUM_THREADS: "12"
+          OPENBLAS_NUM_THREADS: "12"
+          OMP_NUM_THREADS: "12"
+          VECLIB_MAXIMUM_THREADS: "12"
+          PYTORCH_ENABLE_MPS_FALLBACK: "1"
+          PYTORCH_MPS_HIGH_WATERMARK_RATIO: "0.95"
+          PYTORCH_MPS_ALLOCATOR_POLICY: "delayed"
+          METAL_DEBUG_ERROR_MODE: "immediate"
+          METAL_DEVICE_WRAPPER_TYPE: "completion"
+          MTL_NUM_COMMAND_QUEUES: "3"
+          PYTORCH_MPS_MINIMUM_SPLIT_SIZE: "128"
+          METAL_MAX_COMMAND_BUFFER_SIZE: "128"
+          MALLOC_ARENA_MAX: "4"
+          PYTHONMALLOC: "malloc"
+          PYTORCH_CUDA_ALLOC_CONF: "max_split_size_mb:128"
+        run: |
+          # Metal Performance Configuration and Validation
+          cat > metal_validation.py << 'EOL'
+          from config.settings import validate_metal_config
+          from utils.metal_monitor import MetalMonitor, metal_performance_context
+          import torch
+          import logging
+          import json
+
+          logging.basicConfig(level=logging.INFO)
+          logger = logging.getLogger('metal_setup')
+
+          # Validate Metal configuration
+          if not validate_metal_config():
+              raise RuntimeError('Metal configuration validation failed')
+
+          # Initialize monitoring
+          monitor = MetalMonitor()
+
+          with metal_performance_context() as ctx:
+              # Basic validation with monitoring
+              if torch.backends.mps.is_available():
+                  device = torch.device('mps')
+                  test_tensor = torch.randn(1000, 1000, device=device)
+                  result = test_tensor.sum()
+                  logger.info(f'Validation tensor sum: {result.item()}')
+                  del test_tensor
+                  torch.mps.empty_cache()
+              
+              metrics = ctx.stop()
+              logger.info(f'Metal validation metrics: {metrics}')
+              
+              # Save metrics for analysis
+              with open('metal_validation_metrics.json', 'w') as f:
+                  json.dump(metrics, f, indent=2)
+
+          print('::set-output name=metal_status::configured')
+          EOL
+          python metal_validation.py
+
+          # Start memory pressure monitoring
+          cat > memory_monitor.py << 'EOL'
+          import psutil
+          import time
+          import os
+          import threading
+
+          def monitor_memory():
+              while True:
+                  mem = psutil.virtual_memory()
+                  if mem.percent > 90:
+                      print('Memory pressure detected: {:.1f}%'.format(mem.percent))
+                      os.system('sudo purge')
+                  time.sleep(int(os.environ.get('MEMORY_PRESSURE_CHECK_INTERVAL', 30)))
+
+          threading.Thread(target=monitor_memory, daemon=True).start()
+          EOL
+          python memory_monitor.py
+          # Run benchmarks with pytest
+          env PYTHONPATH="${PYTHONPATH}:${PWD}" python -m pytest \
+            tests/benchmarks/regression_testing.py \
+            --benchmark-only \
+            --benchmark-min-rounds="${{ steps.load-config.outputs.iterations }}" \
+            --benchmark-json="benchmark-results.json" \
+            --env-config="${{ env.CONFIG_FILE }}" \
+            --env-name="${{ env.BENCHMARK_ENV }}" \
+            -n auto \
+            --dist=loadfile \
+            --benchmark-disable-gc \
+            --benchmark-warmup=on \
+            --benchmark-batch-size="${{ env.METAL_MPS_BATCH_SIZE }}" \
+            --benchmark-max-time=30 \
+            --benchmark-storage="file://./benchmark_storage" \
+            --benchmark-autosave
+
+      - name: Analyze results
+        id: analyze
+        run: |
+          env PYTHONPATH="${PYTHONPATH}:${PWD}" python tests/benchmarks/ci_analysis.py \
+            --results="benchmark-results.json" \
+            --report="benchmark-report.md" \
+            --threshold="0.1" \
+            --confidence="0.95"
+
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: |
+            benchmark-results.json
+            benchmark-report.md
+          retention-days: 90
+
+      - name: Update baseline
+        if: github.event_name == 'schedule' && success()
+        run: |
+          mkdir -p tests/benchmarks/baselines
+          cp benchmark-results.json tests/benchmarks/baselines/baseline.json
+
+      - name: Upload new baseline
+        if: github.event_name == 'schedule' && success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-baseline
+          path: tests/benchmarks/baselines/baseline.json
+          retention-days: 90
+
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('benchmark-report.md', 'utf8');
+            const analysis = JSON.parse(fs.readFileSync('benchmark-results.json', 'utf8'));
+            
+            let comment = `## Performance Benchmark Results\n\n`;
+            
+            if (analysis.regression_detected) {
+              comment += `⚠️ **Performance regression detected!**\n\n`;
+            } else {
+              comment += `✅ **No performance regression detected**\n\n`;
+            }
+            
+            comment += report;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Check for regressions
+        if: ${{ steps.analyze.outputs.regression_detected == 'true' }}
+        run: |
+          echo "Performance regression detected!"
+          exit 1

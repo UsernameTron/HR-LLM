@@ -1,0 +1,36 @@
+{{ define "slack.title" }}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+{{ end }}
+
+{{ define "slack.text" }}
+{{ if gt (len .Alerts.Firing) 0 }}
+*Alerts Firing:*
+{{ range .Alerts.Firing }}
+• *Alert:* {{ .Labels.alertname }}
+• *Severity:* {{ .Labels.severity }}
+• *Category:* {{ .Labels.category }}
+• *Summary:* {{ .Annotations.summary }}
+• *Description:* {{ .Annotations.description }}
+• *Started:* {{ .StartsAt | since }}
+{{ if .Annotations.runbook }}• *Runbook:* {{ .Annotations.runbook }}{{ end }}
+{{ end }}
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+*Resolved Alerts:*
+{{ range .Alerts.Resolved }}
+• *Alert:* {{ .Labels.alertname }}
+• *Resolved:* {{ .EndsAt | since }}
+{{ end }}
+{{ end }}
+{{ end }}
+
+{{ define "slack.footer" }}
+{{ if gt (len .Alerts.Firing) 0 }}
+*Next Steps:*
+1. Check the linked dashboard for detailed metrics
+2. Review system logs for related errors
+3. Follow the runbook if provided
+4. Escalate to the appropriate team if needed
+{{ end }}
+{{ end }}
