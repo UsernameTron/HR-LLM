@@ -1,47 +1,140 @@
 """
-Data ingestion pipeline with Kafka integration for real-time hiring signals.
-Optimized for high-throughput processing on M4 Pro hardware.
+Data ingestion pipeline using RSS feeds and web scraping for hiring signals.
+Optimized for reliability and simplicity.
 """
 import asyncio
-import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+from datetime import datetime, timedelta
 
-from kafka import KafkaConsumer, KafkaProducer
-from kafka.errors import KafkaError
+import aiohttp
+import feedparser
+from bs4 import BeautifulSoup
 
-from config.config import settings
 from src.utils.metrics import MetricsTracker
 
 logger = logging.getLogger(__name__)
 
 class DataIngestionPipeline:
     def __init__(self):
-        self.producer = KafkaProducer(
-            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-            acks='all',  # Ensure durability
-            compression_type='gzip',  # Optimize network bandwidth
-            batch_size=32 * 1024,  # 32KB batches
-            linger_ms=50,  # Wait for batch completion
-        )
-        
-        self.consumer = KafkaConsumer(
-            settings.KAFKA_TOPIC,
-            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-            value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-            group_id='hiring_signals_processor',
-            auto_offset_reset='latest',
-            enable_auto_commit=False,
-            max_poll_records=100,  # Optimize for M4 Pro memory
-        )
-        
         self.metrics = MetricsTracker()
+        self.session = None
+        
+        # Default RSS feeds for job postings
+        self.rss_feeds = [
+            'https://www.indeed.com/rss?q=software',
+            'https://stackoverflow.com/jobs/feed',
+            'https://www.dice.com/rss'
+        ]
+        
+        # Web sources to scrape
+        self.web_sources = [
+            'https://www.linkedin.com/jobs',
+            'https://www.glassdoor.com/Job'
+        ]
+        
+    async def init_session(self):
+        """Initialize aiohttp session for async requests"""
+        if not self.session:
+            self.session = aiohttp.ClientSession()
     
-    async def ingest_data(self, source: str, data: Dict[str, Any]) -> bool:
+    async def ingest_data(self) -> List[Dict]:
         """
-        Ingest data from various sources into Kafka.
-        Implements backpressure handling and metrics tracking.
+        Collect job posting data from RSS feeds and web sources.
+        Returns a list of job postings with metadata.
+        """
+        try:
+            await self.init_session()
+            
+            # Collect data from both sources
+            rss_data = await self.process_rss_feeds()
+            web_data = await self.process_web_sources()
+            
+            # Combine and deduplicate
+            all_data = rss_data + web_data
+            seen_urls = set()
+            unique_data = []
+            
+            for item in all_data:
+                if item['url'] not in seen_urls:
+                    seen_urls.add(item['url'])
+                    unique_data.append(item)
+            
+            return unique_data
+            
+        except Exception as e:
+            logger.error(f"Error ingesting data: {str(e)}")
+            raise
+            
+    async def process_rss_feeds(self) -> List[Dict]:
+        """Process all RSS feeds for job postings"""
+        results = []
+        
+        for feed_url in self.rss_feeds:
+            try:
+                feed = feedparser.parse(feed_url)
+                
+                for entry in feed.entries:
+                    results.append({
+                        'title': entry.title,
+                        'description': entry.description,
+                        'url': entry.link,
+                        'source': feed_url,
+                        'timestamp': datetime.now().isoformat(),
+                        'type': 'rss'
+                    })
+                    
+            except Exception as e:
+                logger.error(f"Error processing RSS feed {feed_url}: {str(e)}")
+                continue
+                
+        return results
+    
+    async def process_web_sources(self) -> List[Dict]:
+        """Scrape job postings from web sources"""
+        results = []
+        
+        for source_url in self.web_sources:
+            try:
+                async with self.session.get(source_url) as response:
+                    if response.status == 200:
+                        html = await response.text()
+                        soup = BeautifulSoup(html, 'html.parser')
+                        
+                        # Extract job postings (customize selectors per site)
+                        job_elements = soup.find_all('div', class_='job-posting')
+                        
+                        for job in job_elements:
+                            results.append({
+                                'title': job.find('h2').text.strip(),
+                                'description': job.find('div', class_='description').text.strip(),
+                                'url': job.find('a')['href'],
+                                'source': source_url,
+                                'timestamp': datetime.now().isoformat(),
+                                'type': 'web'
+                            })
+                            
+            except Exception as e:
+                logger.error(f"Error scraping {source_url}: {str(e)}")
+                continue
+                
+        return results
+    
+    async def cleanup(self):
+        """Cleanup resources"""
+        if self.session:
+            await self.session.close()
+            
+    async def send_to_kafka(self, source: str, data: dict) -> bool:
+        """
+        Send ingested data to Kafka topic with proper error handling and metrics tracking.
+        
+        Args:
+            source: The data source identifier
+            data: The data to be sent
+            
+        Returns:
+            bool: True if successful, False otherwise
         """
         try:
             message = {

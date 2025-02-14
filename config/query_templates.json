@@ -1,0 +1,46 @@
+{
+    "company_analysis": {
+        "funding": {
+            "template": "company {company_name} funding investment announcement recent {timeframe}",
+            "platforms": ["news", "press_releases"],
+            "confidence": 0.9
+        },
+        "hiring_direct": {
+            "template": "company {company_name} hiring job openings careers growth {timeframe}",
+            "platforms": ["company_website", "job_boards"],
+            "confidence": 0.85
+        },
+        "social_signals": {
+            "template": "company {company_name} {platform} discussions about hiring growth team expansion {timeframe}",
+            "platforms": ["twitter", "linkedin", "reddit", "hackernews"],
+            "confidence": 0.7
+        },
+        "tech_expansion": {
+            "template": "company {company_name} technology infrastructure scaling engineering growth {timeframe}",
+            "platforms": ["tech_blogs", "engineering_posts"],
+            "confidence": 0.8
+        },
+        "leadership_signals": {
+            "template": "company {company_name} CTO CEO executive posts about hiring growth team {timeframe}",
+            "platforms": ["linkedin", "twitter"],
+            "confidence": 0.85
+        }
+    },
+    "validation_queries": {
+        "hiring_verification": {
+            "template": "verify company {company_name} actual hiring data employees joined {timeframe}",
+            "platforms": ["linkedin", "company_announcements"],
+            "confidence": 0.9
+        }
+    },
+    "timeframes": {
+        "recent": "past 7 days",
+        "month": "past 30 days",
+        "quarter": "past 90 days"
+    },
+    "meta_parameters": {
+        "max_results_per_query": 10,
+        "min_confidence_threshold": 0.6,
+        "cross_validation_required": true
+    }
+}

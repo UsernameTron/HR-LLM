@@ -20,9 +20,13 @@ class CacheMiddleware:
     def __init__(self):
         self.redis_manager = RedisManager()
         self.metrics = MetricsTracker()
+        self._cache_warmed = False
         
-        # Initialize cache warming
-        asyncio.create_task(self._warm_cache())
+    async def init(self):
+        """Initialize the cache middleware asynchronously"""
+        if not self._cache_warmed:
+            await self._warm_cache()
+            self._cache_warmed = True
     
     def cache_api_response(self, source: str, endpoint: str):
         """

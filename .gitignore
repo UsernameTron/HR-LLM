@@ -1,7 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.class
 *.so
 .Python
 build/
@@ -24,7 +24,6 @@ wheels/
 venv/
 ENV/
 env/
-.env
 
 # IDE
 .idea/
@@ -33,32 +32,14 @@ env/
 *.swo
 
 # Project specific
-metrics_tmp/
-logs/
-*.log
-test_results/
-.coverage
-htmlcov/
-
-# Monitoring
-grafana/data/
-prometheus/data/
-
-# Redis
-dump.rdb
-*.rdb
-
-# Mac
-.DS_Store
-
-# Model files
+.cache/
+.kaggle/
 *.pt
-*.pth
-*.onnx
 model_cache/
-
-# Secrets
 .env
-*.pem
-*.key
-credentials.json
+config/credentials.json
+
+# Logs
+*.log
+logs/
+

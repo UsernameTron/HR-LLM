@@ -1,0 +1,41 @@
+{
+    "signal_weights": {
+        "funding": {
+            "series_funding": 0.9,
+            "seed_funding": 0.7,
+            "acquisition": 0.8,
+            "ipo": 0.9
+        },
+        "social": {
+            "cto_posts": 0.8,
+            "employee_discussions": 0.6,
+            "company_announcements": 0.85,
+            "tech_blog_posts": 0.7
+        },
+        "technical": {
+            "infrastructure_scaling": 0.8,
+            "team_expansion": 0.85,
+            "office_expansion": 0.7,
+            "product_launch": 0.75
+        },
+        "time_decay": {
+            "recent_week": 1.0,
+            "recent_month": 0.8,
+            "recent_quarter": 0.6,
+            "beyond_quarter": 0.4
+        }
+    },
+    "confidence_thresholds": {
+        "high": 0.8,
+        "medium": 0.6,
+        "low": 0.4
+    },
+    "validation_weights": {
+        "confirmed_hire": 1.0,
+        "partial_match": 0.5,
+        "false_positive": -0.3
+    },
+    "learning_rate": 0.1,
+    "decay_factor": 0.95,
+    "minimum_confidence": 0.3
+}

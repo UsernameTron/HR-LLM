@@ -18,6 +18,12 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
+  - job_name: 'hiring-sentiment-tracker'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: /metrics
+    scrape_interval: 15s
+
   - job_name: 'metrics-exporter'
     static_configs:
       - targets: ['metrics-exporter:9091']

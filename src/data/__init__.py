@@ -2,7 +2,11 @@
 Data processing package initialization.
 Sets up cache middleware for all processors.
 """
-from src.cache.middleware import CacheMiddleware
+from ..cache.middleware import CacheMiddleware
 
-# Initialize cache middleware
+# Create cache middleware instance
 cache = CacheMiddleware()
+
+async def init_cache():
+    """Initialize cache middleware asynchronously"""
+    await cache.init()

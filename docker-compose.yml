@@ -3,6 +3,7 @@ version: '3.8'
 services:
   app:
     build: .
+    command: python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     environment:
@@ -10,15 +11,9 @@ services:
       - PROMETHEUS_MULTIPROC_DIR=/tmp/metrics
     volumes:
       - ./metrics_tmp:/tmp/metrics
+      - .:/app
     depends_on:
       - redis
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: apple-gpu
-              count: 1
-              capabilities: [gpu]
 
   redis:
     image: redis:latest
@@ -51,6 +46,9 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
     depends_on:
       - prometheus
 

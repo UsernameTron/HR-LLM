@@ -1,0 +1,29 @@
+groups:
+  - name: sentiment_analysis
+    rules:
+      - alert: HighErrorRate
+        expr: error_rate > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High error rate detected
+          description: Error rate has exceeded 10% for 5 minutes
+
+      - alert: HighLatency
+        expr: p95_latency > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High latency detected
+          description: P95 latency has exceeded 200ms for 5 minutes
+
+      - alert: HighMemoryUsage
+        expr: memory_usage_bytes > 40000000000  # 40GB
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High memory usage detected
+          description: Memory usage has exceeded 40GB for 5 minutes
