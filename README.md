@@ -1,75 +1,134 @@
-# AI-Powered Hiring Sentiment Tracker
+# Hiring Sentiment Tracker
 
-## Overview
-Advanced AI-driven system for detecting hiring signals before job postings go live. Leverages Metal Performance Shaders (MPS) optimization for Apple M4 Pro hardware.
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-## Key Features
-- Multi-label classification for hiring signals
-- Real-time and batch processing capabilities
-- MPS-optimized transformer models
-- Intelligent caching system
-- API integration with major data providers
-- Drift detection and anomaly tracking
-- Explainable AI outputs (SHAP/LIME)
+An advanced AI-powered system for analyzing job postings and detecting hiring signals. This project uses state-of-the-art NLP techniques and pattern recognition to provide insights into hiring trends and company growth signals.
 
-## Hardware Optimization
-- Optimized for Apple M4 Pro
-- Leverages 18-core GPU with Metal 3 support
-- Utilizes 48GB unified memory for efficient batch processing
-- NVMe SSD caching for embeddings and frequent queries
+## Features
 
-## Setup
-1. Create a virtual environment:
+- 🎯 **Intelligent Pattern Detection**
+  - Multi-algorithm fuzzy matching
+  - Support for 6 key signal categories
+  - Pattern diversity scoring
+
+- 📊 **Sentiment Analysis**
+  - Real-time sentiment scoring
+  - Confidence-based analysis
+  - Historical trend tracking
+
+- ⚡ **High Performance**
+  - ~100ms per job posting
+  - Efficient caching system
+  - Apple Silicon optimization
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.8+
+- Redis (for caching)
+- Node.js 16+ (for frontend)
+
+### Installation
+
+1. Clone the repository:
 ```bash
-python -m venv venv
-source venv/bin/activate
+git clone https://github.com/UsernameTron/HR-LLM.git
+cd HR-LLM
 ```
 
-2. Install dependencies:
+2. Create and activate virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+```
+
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Configure environment variables:
+4. Set up environment variables:
 ```bash
 cp .env.example .env
-# Edit .env with your API keys and configurations
+# Edit .env with your configuration
+```
+
+5. Start the services:
+```bash
+docker-compose up -d  # Starts Redis and monitoring services
+python src/main.py   # Starts the main application
 ```
 
 ## Project Structure
+
 ```
 hiring-sentiment-tracker/
-├── src/
-│   ├── core/           # Core ML models and utilities
-│   ├── data/           # Data ingestion and processing
-│   ├── api/            # API endpoints and services
-│   ├── cache/          # Caching mechanisms
-│   └── utils/          # Utility functions
-├── tests/              # Test suite
-├── config/             # Configuration files
-├── notebooks/          # Development notebooks
-└── scripts/            # Utility scripts
+├── src/               # Source code
+│   ├── models/       # ML models and algorithms
+│   ├── data/         # Data processing and ingestion
+│   ├── api/          # API endpoints
+│   └── utils/        # Utility functions
+├── tests/            # Test suite
+├── frontend/         # Vue.js frontend
+├── config/           # Configuration files
+└── docs/            # Documentation
 ```
 
 ## Development
-- Uses FastAPI for API endpoints
-- Kafka for durable data ingestion
-- Redis Streams for low-latency processing
-- Automated testing with pytest
-- Code formatting with black and isort
 
-## API Integration
-Supports multiple data sources:
-- NewsAPI
-- GDELT
-- LinkedIn Insights
-- Custom data providers
+### Setting up the development environment
 
-## Performance Monitoring
-- Real-time performance metrics
-- Drift detection
-- Anomaly tracking
-- Resource utilization monitoring
+1. Install development dependencies:
+```bash
+pip install -r requirements-test.txt
+```
+
+2. Run tests:
+```bash
+pytest
+```
+
+3. Format code:
+```bash
+black .
+isort .
+```
+
+### Running the Frontend
+
+```bash
+cd frontend
+npm install
+npm run serve
+```
+
+## Performance Metrics
+
+See our detailed performance analysis in [PHASE_1_RESULTS.md](PHASE_1_RESULTS.md)
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+## Documentation
+
+- [API Documentation](docs/API.md)
+- [Data Pipeline](docs/DATA_PIPELINE.md)
+- [Model Architecture](docs/MODEL.md)
 
 ## License
-Proprietary - All rights reserved
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Thanks to all contributors who have helped shape this project
+- Special thanks to the open-source community for the amazing tools and libraries
+
+## Contact
+
+- GitHub: [@UsernameTron](https://github.com/UsernameTron)
+- Project Link: [https://github.com/UsernameTron/HR-LLM](https://github.com/UsernameTron/HR-LLM)
