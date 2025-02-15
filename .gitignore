@@ -43,3 +43,9 @@ config/credentials.json
 *.log
 logs/
 
+
+# Large data files
+data/raw/glassdoor/all_reviews.csv
+data/raw/glassdoor/glassdoor_reviews.csv
+data/raw/tweet-sentiment-s-impact-on-stock-returns/full_dataset-release.csv
+data/raw/**/*.csv
